@@ -17,6 +17,8 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -53,14 +55,19 @@ public class SimpleWatcher {
                         for (WatchEvent<?> e : k.pollEvents()) {
                             WatchEvent<Path> path = (WatchEvent<Path>)e;
                             Kind<?> kind = e.kind();
+                            Path p = path.context();
+                            
                             if(kind == ENTRY_CREATE){
-                                for(FileChangeWatcher w : watchers) w.added(path.context());
+                                for(FileChangeWatcher w : watchers) w.added(p);
                             }else if(kind == ENTRY_DELETE){
-                                for(FileChangeWatcher w : watchers) w.removed(path.context());
+                                for(FileChangeWatcher w : watchers) w.removed(p);
                             }
                         }
+                        k.reset();
                     }
-                }catch(InterruptedException e){}
+                }catch(InterruptedException e){
+                    e.printStackTrace();
+                }
             }
             
         },"Directory Watcher").start();
