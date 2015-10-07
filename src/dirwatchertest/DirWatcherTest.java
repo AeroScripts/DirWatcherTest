@@ -5,6 +5,7 @@
  */
 package dirwatchertest;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.logging.Level;
@@ -22,15 +23,16 @@ public class DirWatcherTest {
     public static void main(String[] args) {
         try {
             SimpleWatcher watcher = new SimpleWatcher(new String[]{"./test1/", "./test2/", "./test3"});
+            watcher.addExtensions("mp3", "flac", "aac", "wav", "ogg"); // etc (also accepts arrays)
             watcher.addWatcher(new FileChangeWatcher() {
 
                 @Override
-                public void added(Path p) {
+                public void added(File p) {
                     System.out.println("File added: " + p);
                 }
 
                 @Override
-                public void removed(Path p) {
+                public void removed(File p) {
                     System.out.println("File removed: " + p);
                 }
                 

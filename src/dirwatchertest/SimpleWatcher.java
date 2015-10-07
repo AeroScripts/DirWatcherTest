@@ -24,7 +24,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class SimpleWatcher {
     
-    // May want to implement proper concurrency here but CopyOnWriteArrayList work fine in most cases.
     CopyOnWriteArrayList<FileChangeWatcher> watchers = new CopyOnWriteArrayList<FileChangeWatcher>();
     CopyOnWriteArrayList<File> watchedFiles = new CopyOnWriteArrayList<File>(); // because it needs to fire removed for every deleted file if a directory is deleted
     ArrayList<String> extensions = new ArrayList<String>();
@@ -42,59 +41,74 @@ public class SimpleWatcher {
             watchDir(s);
         }
     }
+    
+    public void watchDir(Path p) throws IOException{
+        File f = p.toFile();
+        watchDir(f);
+    }
+    
+    public void watchDir(File f) throws IOException{
+        registerForWatch(f);
+        // so that it can fire for each file when a folder is deleted
+//        for(File s : f.listFiles())
+//            
+    }
+    
+    private void registerForWatch(File f) throws IOException{
+        Paths.get(f.toURI()).register(watcher, ENTRY_CREATE, ENTRY_DELETE);
+    }
+    
+    public void addWatcher(FileChangeWatcher watcher){
+        watchers.add(watcher);
+    }
 
-    private void removeAll(File f) {
-        if(f.isDirectory()){
-            String root = f.toString();
-            for(File file : watchedFiles){
-                String full = file.toString();
-                if(full.startsWith(root)){
-                    for(FileChangeWatcher w : watchers)
-                        w.removed(Paths.get(f.toURI()));
-                    watchedFiles.remove(file); // this normally isnt safe, but thanks to CopyOnWriteArrayList...
-                }
-            }
-        }else{
-            for(FileChangeWatcher w : watchers) 
-                w.added(Paths.get(f.toURI()));
-            watchedFiles.remove(f);
+    public void addExtensions(String ... extensions) {
+        for(String s : extensions){
+            int l = s.length();
+            if(l>3)s=s.substring(l-3);else if(l==2)s="."+s; // ugly little bit of code but it makes lookups much faster (does not work with file formats that are only 1 chracter long)
+            this.extensions.add(s);
         }
     }
-    
-    private void checkAll(File f, Kind<?> kind, boolean fire) throws IOException{
-        if(!f.exists()) return;
-        Path p = Paths.get(f.toURI());
-        p.register(watcher, ENTRY_CREATE, ENTRY_DELETE); // there has to be a better way to convert File to Path... Oh well
-        if(kind == ENTRY_DELETE){
-            removeAll(f);
-        }else{
-            for(File s : f.listFiles()){
-                if(s.isDirectory()){
-                    checkAll(s, kind, fire);
-                }else
-                    checkFile(s, kind, fire);
-            }
-        }
-    }
-    
-    public boolean isValid(File f){
+
+    private boolean isValid(File f){
         String name = f.getName();
         return !f.isDirectory() && extensions.contains(name.substring(name.length()-3));
     }
     
-    public void checkFile(File f, Kind<?> kind, boolean fire){
+    private void process(File f, Kind<?> kind) throws IOException{
+        switch(kind.name()){
+            case "ENTRY_CREATE":
+                if(f.isDirectory())
+                    watchDir(f);
+                else
+                    added(f);
+                break;
+            case "ENTRY_DELETE":
+                removed(f);
+                break;
+            default: break;
+        }
+    }
+    
+    private void added(File f) throws IOException {
         if(isValid(f)){
-            if(kind == ENTRY_CREATE){
-                if(fire)
-                    for(FileChangeWatcher w : watchers) 
-                        w.added(Paths.get(f.toURI()));
-                watchedFiles.add(f);
-            }else if(kind == ENTRY_DELETE){
-                if(fire)
-                    for(FileChangeWatcher w : watchers) 
-                        w.removed(Paths.get(f.toURI()));
-                watchedFiles.remove(f);
+            watchedFiles.add(f);
+            for(FileChangeWatcher w : watchers)
+                w.added(f);
+        }
+    }
+    
+    private void removed(File f) throws IOException {
+        if(f.isDirectory()){
+            String root = f.toString();
+            for(File s : watchedFiles){
+                if(s.toString().startsWith(root)) // not the best way to do this but it's reliable
+                    removed(s);
             }
+        }else{
+            watchedFiles.remove(f);
+            for(FileChangeWatcher w : watchers)
+                w.removed(f);
         }
     }
     
@@ -115,44 +129,20 @@ public class SimpleWatcher {
                             Path dir = (Path)k.watchable();
                             Path p = dir.resolve(path.context()).normalize();
                             File f = p.toFile();
-                            if(f.isDirectory())
-                                checkAll(f, kind, true);
-                            else 
-                                checkFile(f, kind, true);
+                            try {
+                                process(f, kind);
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
                         }
                         k.reset();
                     }
                 }catch(InterruptedException e){
                     e.printStackTrace();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
                 }
             }
             
         },"Directory Watcher").start();
-    }
-    
-    
-    public void watchDir(Path p) throws IOException{
-        p.register(watcher, ENTRY_CREATE, ENTRY_DELETE);
-        // so that it can fire for each file when a folder is deleted
-        for(File f : p.toFile().listFiles())
-            if(f.isDirectory())
-                checkAll(f, ENTRY_CREATE, false);
-            else if(isValid(f))
-                watchedFiles.add(f);
-    }
-    
-    public void addWatcher(FileChangeWatcher watcher){
-        watchers.add(watcher);
-    }
-
-    void addExtensions(String ... extensions) {
-        for(String s : extensions){
-            int l = s.length();
-            if(l>3)s=s.substring(l-3);else if(l==2)s="."+s; // ugly little bit of code but it makes lookups much faster (does not work with file formats that are only 1 chracter long)
-            this.extensions.add(s);
-        }
     }
     
 }

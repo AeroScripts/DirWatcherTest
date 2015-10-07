@@ -5,6 +5,7 @@
  */
 package dirwatchertest;
 
+import java.io.File;
 import java.nio.file.Path;
 
 /**
@@ -12,6 +13,6 @@ import java.nio.file.Path;
  * @author Aero
  */
 public interface FileChangeWatcher {
-    abstract void added(Path p);
-    abstract void removed(Path p);
+    abstract void added(File p);
+    abstract void removed(File p);
 }
