@@ -49,9 +49,12 @@ public class SimpleWatcher {
     
     public void watchDir(File f) throws IOException{
         registerForWatch(f);
-        // so that it can fire for each file when a folder is deleted
-//        for(File s : f.listFiles())
-//            
+        for(File s : f.listFiles()){
+            if(s.isDirectory())
+                watchDir(s);
+            else
+                added(s);
+        }
     }
     
     private void registerForWatch(File f) throws IOException{
