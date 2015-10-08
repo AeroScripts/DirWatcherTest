@@ -117,9 +117,11 @@ public class SimpleWatcher {
                     removed(s);
             }
         }else{
-            watchedFiles.remove(f);
-            for(FileChangeWatcher w : watchers)
-                w.removed(f);
+            if(isValid(f)){
+                watchedFiles.remove(f);
+                for(FileChangeWatcher w : watchers)
+                    w.removed(f);
+            }
         }
     }
     
