@@ -11,7 +11,6 @@ import java.nio.file.WatchEvent.Kind;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
@@ -20,21 +19,6 @@ import java.util.concurrent.TimeUnit;
  * @author Aero
  */
 public class SimpleWatcher {
-    
-    private class MoveHackContainer {
-        File file;
-        String name;
-        long deleted;
-        MoveHackContainer(File f, long deleted){
-            file = f;
-            name = file.getName();
-            this.deleted = deleted;
-        }
-        @Override
-        public int hashCode() {
-            return file.getName().hashCode();
-        }
-    }
     
     CopyOnWriteArrayList<FileChangeWatcher> watchers = new CopyOnWriteArrayList<FileChangeWatcher>();
     CopyOnWriteArrayList<File> watchedFiles = new CopyOnWriteArrayList<File>(); // because it needs to fire removed for every deleted file if a directory is deleted
@@ -148,7 +132,6 @@ public class SimpleWatcher {
                 try{
                     while(true){ // not a fan
                         k = watcher.take();
-//                        watcher.
                         boolean removed = false;
                         File lastRemoved = null;
                         int cnt = 0;
