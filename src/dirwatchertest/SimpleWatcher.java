@@ -168,7 +168,7 @@ public class SimpleWatcher {
                         }
                         k.reset();
                         if(removed){
-                            k = watcher.poll(60, TimeUnit.MILLISECONDS);
+                            k = watcher.poll(MOVEHACK_MAX_TIME, TimeUnit.MILLISECONDS);
                             if(k != null){
                                 for (WatchEvent<?> e : k.pollEvents()) {
                                     Kind<?> kind = e.kind();
