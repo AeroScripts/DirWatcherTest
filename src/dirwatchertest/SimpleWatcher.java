@@ -13,6 +13,7 @@ import java.nio.file.WatchService;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -35,14 +36,12 @@ public class SimpleWatcher {
         }
     }
     
-    
-    final long MOVEHACK_MAX_TIME = 64; // maximum amount of time (miliseconds) between ENTRY_DELETED and ENTRY_CREATED with the same filename
-    
     CopyOnWriteArrayList<FileChangeWatcher> watchers = new CopyOnWriteArrayList<FileChangeWatcher>();
     CopyOnWriteArrayList<File> watchedFiles = new CopyOnWriteArrayList<File>(); // because it needs to fire removed for every deleted file if a directory is deleted
-    HashMap<String, MoveHackContainer> movehack = new HashMap<String, MoveHackContainer>(); // moved file hack
     ArrayList<String> extensions = new ArrayList<String>();
     WatchService watcher;
+    
+    final long MOVEHACK_MAX_TIME = 64; // maximum amount of time (miliseconds) between ENTRY_DELETED and ENTRY_CREATED with the same filename
     
     public SimpleWatcher(String[] directories) throws IOException{
         this();
@@ -105,14 +104,8 @@ public class SimpleWatcher {
     private void added(File f) throws IOException {
         if(isValid(f)){
             watchedFiles.add(f);
-            MoveHackContainer mhc = new MoveHackContainer(f, System.currentTimeMillis());
-            if(movehack.containsKey(mhc.name) && mhc.deleted - movehack.get(mhc.name).deleted < MOVEHACK_MAX_TIME){ 
-                for(FileChangeWatcher w : watchers)
-                    w.moved(movehack.get(mhc.name).file, f);
-                movehack.remove(mhc.name);
-            }else
-                for(FileChangeWatcher w : watchers)
-                    w.added(f);
+            for(FileChangeWatcher w : watchers)
+                w.added(f);
         }
     }
     
@@ -125,11 +118,22 @@ public class SimpleWatcher {
             }
         }else{
             watchedFiles.remove(f);
-            MoveHackContainer mhc = new MoveHackContainer(f, System.currentTimeMillis());
-            movehack.put(mhc.name, mhc);
             for(FileChangeWatcher w : watchers)
                 w.removed(f);
         }
+    }
+    
+    private void processMove(File from, File to){
+        if(to.isDirectory()){
+            String baseFrom = from.toString() + File.separator;
+            System.out.println(baseFrom);
+            for(File f : to.listFiles()){
+                for(FileChangeWatcher w : watchers)
+                    w.moved(new File(baseFrom + f.getName()), f);
+            }
+        }else
+            for(FileChangeWatcher w : watchers)
+                w.moved(from, to);
     }
     
     public SimpleWatcher() throws IOException{ 
@@ -138,24 +142,60 @@ public class SimpleWatcher {
 
             @Override
             public void run() {
-                WatchKey k;
+                WatchKey k = null; // moved hack
                 try{
                     while(true){ // not a fan
                         k = watcher.take();
+//                        watcher.
+                        boolean removed = false;
+                        File lastRemoved = null;
+                        int cnt = 0;
                         for (WatchEvent<?> e : k.pollEvents()) {
                             WatchEvent<Path> path = (WatchEvent<Path>)e;
                             Kind<?> kind = e.kind();
-                            
+                            removed = kind == ENTRY_DELETE;
                             Path dir = (Path)k.watchable();
                             Path p = dir.resolve(path.context()).normalize();
                             File f = p.toFile();
-                            try {
-                                process(f, kind);
-                            } catch (IOException ex) {
-                                ex.printStackTrace();
-                            }
+                            if(removed) 
+                                lastRemoved = f;
+                            else
+                                try {
+                                    process(f, kind);
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                }
                         }
                         k.reset();
+                        if(removed){
+                            k = watcher.poll(60, TimeUnit.MILLISECONDS);
+                            if(k != null){
+                                for (WatchEvent<?> e : k.pollEvents()) {
+                                    Kind<?> kind = e.kind();
+                                    WatchEvent<Path> path = (WatchEvent<Path>)e;
+                                    Path dir = (Path)k.watchable();
+                                    Path p = dir.resolve(path.context()).normalize();
+                                    File f = p.toFile();
+                                    if(kind == ENTRY_CREATE){
+                                        processMove(lastRemoved, f);
+                                        k.reset();
+                                    }else{
+                                        try {
+                                            process(lastRemoved, ENTRY_DELETE);
+                                            process(f, ENTRY_DELETE);
+                                        } catch (IOException ex) {
+                                            ex.printStackTrace();
+                                        }
+                                    }
+                                }
+                                k.reset();
+                            }else 
+                                try {
+                                    process(lastRemoved, ENTRY_DELETE);
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                }
+                        }
                     }
                 }catch(InterruptedException e){
                     e.printStackTrace();
