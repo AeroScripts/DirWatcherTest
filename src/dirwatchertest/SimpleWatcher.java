@@ -157,14 +157,17 @@ public class SimpleWatcher {
                             Path dir = (Path)k.watchable();
                             Path p = dir.resolve(path.context()).normalize();
                             File f = p.toFile();
-                            if(removed) 
-                                lastRemoved = f;
-                            else
-                                try {
-                                    process(f, kind);
-                                } catch (IOException ex) {
-                                    ex.printStackTrace();
-                                }
+                            if(!removed && lastRemoved != null){ // renamed
+                                 processMove(lastRemoved, f);
+                            }else
+                                if(removed) 
+                                    lastRemoved = f;
+                                else
+                                    try {
+                                        process(f, kind);
+                                    } catch (IOException ex) {
+                                        ex.printStackTrace();
+                                    }
                         }
                         k.reset();
                         if(removed){
