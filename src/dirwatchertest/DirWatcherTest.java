@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package dirwatchertest;
 
 import java.io.File;
@@ -34,6 +29,11 @@ public class DirWatcherTest {
                 @Override
                 public void removed(File p) {
                     System.out.println("File removed: " + p);
+                }
+
+                @Override
+                public void moved(File from, File to) {
+                    System.out.println("File moved: " + from.toString() + " -> " + to.toString());
                 }
                 
             });

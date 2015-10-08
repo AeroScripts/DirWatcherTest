@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package dirwatchertest;
 
 import java.io.File;
@@ -16,6 +11,7 @@ import java.nio.file.WatchEvent.Kind;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -24,8 +20,27 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class SimpleWatcher {
     
+    private class MoveHackContainer {
+        File file;
+        String name;
+        long deleted;
+        MoveHackContainer(File f, long deleted){
+            file = f;
+            name = file.getName();
+            this.deleted = deleted;
+        }
+        @Override
+        public int hashCode() {
+            return file.getName().hashCode();
+        }
+    }
+    
+    
+    final long MOVEHACK_MAX_TIME = 64; // maximum amount of time (miliseconds) between ENTRY_DELETED and ENTRY_CREATED with the same filename
+    
     CopyOnWriteArrayList<FileChangeWatcher> watchers = new CopyOnWriteArrayList<FileChangeWatcher>();
     CopyOnWriteArrayList<File> watchedFiles = new CopyOnWriteArrayList<File>(); // because it needs to fire removed for every deleted file if a directory is deleted
+    HashMap<String, MoveHackContainer> movehack = new HashMap<String, MoveHackContainer>(); // moved file hack
     ArrayList<String> extensions = new ArrayList<String>();
     WatchService watcher;
     
@@ -79,25 +94,25 @@ public class SimpleWatcher {
     }
     
     private void process(File f, Kind<?> kind) throws IOException{
-        switch(kind.name()){
-            case "ENTRY_CREATE":
-                if(f.isDirectory())
-                    watchDir(f);
-                else
-                    added(f);
-                break;
-            case "ENTRY_DELETE":
-                removed(f);
-                break;
-            default: break;
-        }
+        if(kind == ENTRY_CREATE){
+            if(f.isDirectory())
+                watchDir(f);
+            else
+                added(f);
+        }else removed(f);
     }
     
     private void added(File f) throws IOException {
         if(isValid(f)){
             watchedFiles.add(f);
-            for(FileChangeWatcher w : watchers)
-                w.added(f);
+            MoveHackContainer mhc = new MoveHackContainer(f, System.currentTimeMillis());
+            if(movehack.containsKey(mhc.name) && mhc.deleted - movehack.get(mhc.name).deleted < MOVEHACK_MAX_TIME){ 
+                for(FileChangeWatcher w : watchers)
+                    w.moved(movehack.get(mhc.name).file, f);
+                movehack.remove(mhc.name);
+            }else
+                for(FileChangeWatcher w : watchers)
+                    w.added(f);
         }
     }
     
@@ -110,6 +125,8 @@ public class SimpleWatcher {
             }
         }else{
             watchedFiles.remove(f);
+            MoveHackContainer mhc = new MoveHackContainer(f, System.currentTimeMillis());
+            movehack.put(mhc.name, mhc);
             for(FileChangeWatcher w : watchers)
                 w.removed(f);
         }
