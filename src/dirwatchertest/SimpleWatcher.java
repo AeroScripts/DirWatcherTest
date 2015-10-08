@@ -138,7 +138,7 @@ public class SimpleWatcher {
     
     public SimpleWatcher() throws IOException{ 
         watcher = FileSystems.getDefault().newWatchService();
-        new Thread(new Runnable() {
+        Thread t = new Thread(new Runnable() {
 
             @Override
             public void run() {
@@ -202,7 +202,9 @@ public class SimpleWatcher {
                 }
             }
             
-        },"Directory Watcher").start();
+        },"Directory Watcher");
+        t.setDaemon(true);
+        t.start();
     }
     
 }
